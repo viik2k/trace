@@ -30,6 +30,28 @@ uv run python -c "import jax; print(jax.devices())"
 
 Lint: `uv run ruff check . && uv run ruff format --check .`
 
+### M5 result (2026-09-26, RTX 2060 SUPER, ~35 min)
+
+```bash
+uv run python scripts/make_tracks.py --out data/tight14 --tight-frac 0.5 --tight-radius 14
+uv run python -m trace_rl.ppo --seed 1 --ent-coef 0.003 --total-steps 1500000000 \
+  --train-tracks data/tight14/tracks_train.npz
+uv run python scripts/eval.py --ckpt runs/<run>/best.eqx
+```
+
+```
+track    driver       laps   flying offtrk  term  rev/s |dsteer|  edge%
+oval     policy          5   42.20s      0 False   0.38    0.006   0.0%
+oval     pure_pursuit    5   45.50s      0 False   0.00    0.001   0.0%
+hairpin  policy          4   57.40s      0 False   1.74    0.016   4.2%
+hairpin  pure_pursuit    3   61.50s      0 False   0.10    0.005   0.0%
+sweeper  policy          4   51.00s      0 False   0.09    0.006   1.1%
+sweeper  pure_pursuit    4   53.00s      0 False   0.00    0.001   0.0%
+Phase 1: clean laps on all held-out tracks: True; beats pure pursuit on every flying lap: True
+```
+
+Val clean-lap rate 0.91. One seed of three passes; the other two went off or crashed on one track.
+
 ## Layout
 
 ```
@@ -53,7 +75,8 @@ tests/
 - **Env**: policy acts at 20 Hz (3 physics steps per decision). Observation is car-frame only: no
   global position.
 - **Reward**: progress in metres × 0.01, minus 0.05 per decision past track limits (all four wheels
-  over the edge), minus 0.002 × ‖Δaction‖², minus 2.0 on termination (crash or stuck).
+  over the edge), minus 0.01 × ‖Δaction‖². A termination penalty (`--env.crash-penalty`) exists but
+  defaults to 0.
 - **Termination**: 3 m of runoff past track limits, or stuck below 1 m/s for 2 s. Truncation at
   3000 decisions (150 s).
 - **Training**: one jitted call runs `updates_per_chunk` PPO updates, with no host round-trips.

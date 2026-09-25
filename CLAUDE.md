@@ -48,5 +48,18 @@ Nothing beyond phase 1 gets built; later ideas go in DEFERRED.md with one line o
   0.13/0.47/0.36. Inconclusive; no penalty drives ~12% faster and beats pure pursuit on the oval
   (43.0 vs 45.5 s). All 7 runs crash the hairpin (13.1 m radius, ~p5 of the train pool).
   Entropy collapses by ~50M steps (ent_coef 0). 1.5B-step run: val clean 0.48, sweeper 36% of
-  time on the edge; nopen-s1 weaves at 14 steer reversals/s on the sweeper. No fix applied yet.
+  time on the edge; nopen-s1 weaves at 14 steer reversals/s on the sweeper.
+- Overnight 2026-09-26 (new reward: jerk 0.01, no crash penalty). Scripts in `runs/round*.sh`.
+  Best val clean per seed:
+  - R1, 300M: ent_coef 0.003 wins with 0.38/0.34 (ent 0: 0.20/0.09; ent 0.01: 0.08/0.16). Sweeper
+    weave gone (<1 reversal/s). 40% tight (<16 m) pool: same val, no hairpin gain at ent 0.003.
+  - R2, 1.5B with ent 0.003: normal pool 0.86, tight pool 0.92. Laps all three reference tracks,
+    but the hairpin goes off 4-16 times per 4 laps (edge cutting, since the off-track penalty is
+    small). Ent 0.005 at 300M does no better than 0.003.
+  - R3, 1.5B tight, seeds 1/2: 0.98/0.92. 3B: 0.94, so the budget has saturated.
+  - R4, 1.5B, 50% <14 m pool (`data/tight14`), seeds 0-2: 0.86/0.91/0.97. s1 passes Phase 1:
+    clean on all three reference tracks and beats pure pursuit (README). s0 crashes the hairpin;
+    s2 laps it but goes off 10x on the oval. Passing on only 1 of 3 seeds is not robust yet.
+- Open for the owner: whether to raise the off-track penalty (hairpin cutting), and whether to make
+  ent_coef 0.003 and the tight pool the defaults.
 - Pending on the homelab (via the Arche MCP): Aim server and persistent checkpoint storage.
