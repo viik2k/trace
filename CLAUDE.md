@@ -18,7 +18,9 @@ Nothing beyond phase 1 gets built; later ideas go in DEFERRED.md with one line o
 - Physics 60 Hz (4 substeps), policy 20 Hz (action repeat 3), gamma 0.99.
 - Track limits: penalty when all four wheels are over the edge; terminate 3 m beyond that.
 - Checkpoint selection on held-out procedural val tracks; reference tracks only in M5.
-- Reward: 0.01/m progress, -0.05 per decision past limits, -0.002 * ||delta action||^2.
+- Reward: 0.01/m progress, -0.05 per decision past limits, -0.002 * ||delta action||^2,
+  -2.0 on termination (runoff or stuck; stuck included so stopping can't dodge it). Owner chose a
+  crash penalty over raising gamma to fix corner over-speed. Gamma stays 0.99.
 
 ## Gotchas found so far
 - Physics substeps are separated by `jax.lax.optimization_barrier`. Without it XLA fusion blows up
@@ -33,7 +35,6 @@ Nothing beyond phase 1 gets built; later ideas go in DEFERRED.md with one line o
   rising when the LR schedule hit zero. M5 on it: sweeper clean (55.9 s vs pure pursuit 53.1 s),
   oval and hairpin crash. Failure mode is corner over-speed (median crash speed 1.7x the pure
   pursuit corner speed on val), not a reward exploit. Mild steering weave on the sweeper.
-- Open reward question for the owner: gamma 0.99 gives a ~5 s horizon, so a crash only costs ~5 s
-  of progress. Proposed gamma 0.995 if over-speed crashes persist at full budget. Not applied.
+- Crash penalty added after that probe (see Decisions). Watch for timid driving: slow but alive.
 - Pending on the GPU box: M1 benchmark numbers, full training run, M5 on a trained policy.
 - Pending on the homelab (via the Arche MCP): Aim server and persistent checkpoint storage.
