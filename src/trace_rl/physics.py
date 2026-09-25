@@ -36,6 +36,9 @@ class CarParams(eqx.Module):
     cla: float = 0.0
     crr: float = 0.015  # rolling resistance coefficient
     mu: float = 1.5  # peak tyre friction
+    # Rear peak friction as a multiple of mu (wider rear tyres). At 1 the car is exactly neutral at
+    # the limit: each axle's share of cornering force matches its share of static load.
+    mu_rear_scale: float = 1.0
     # Pacejka lateral: Fy = mu Fz sin(C atan(B a - E (B a - atan(B a)))).
     # Rear slightly stiffer than front gives mild understeer instead of knife-edge neutral steer.
     pac_b_front: float = 11.0
@@ -72,9 +75,9 @@ def slip_angles(s: CarState, steer_angle, p: CarParams):
     return alpha_f, alpha_r
 
 
-def _pacejka(alpha, fz, b, p: CarParams):
+def _pacejka(alpha, fz, b, mu, p: CarParams):
     ba = b * alpha
-    return p.mu * fz * jnp.sin(p.pac_c * jnp.arctan(ba - p.pac_e * (ba - jnp.arctan(ba))))
+    return mu * fz * jnp.sin(p.pac_c * jnp.arctan(ba - p.pac_e * (ba - jnp.arctan(ba))))
 
 
 def _friction_circle(fx, fy, fz, mu):
@@ -102,17 +105,18 @@ def _accelerations(s: CarState, delta, throttle, brake, p: CarParams):
     fz = p.mass * G + 0.5 * RHO_AIR * p.cla * s.vx**2
     fz_f = jnp.maximum(fz * p.lr / wheelbase - dfz, 0.0)
     fz_r = jnp.maximum(fz * p.lf / wheelbase + dfz, 0.0)
+    mu_r = p.mu * p.mu_rear_scale
 
     # Kinematic regime: no lateral tyre forces, longitudinal force limited by grip alone.
     ax_kin = (
         jnp.clip(fx_f, -p.mu * fz_f, p.mu * fz_f)
-        + jnp.clip(fx_r, -p.mu * fz_r, p.mu * fz_r)
+        + jnp.clip(fx_r, -mu_r * fz_r, mu_r * fz_r)
         - resist
     ) / p.mass
 
     alpha_f, alpha_r = slip_angles(s, delta, p)
-    fx_f, fy_f = _friction_circle(fx_f, _pacejka(alpha_f, fz_f, p.pac_b_front, p), fz_f, p.mu)
-    fx_r, fy_r = _friction_circle(fx_r, _pacejka(alpha_r, fz_r, p.pac_b_rear, p), fz_r, p.mu)
+    fx_f, fy_f = _friction_circle(fx_f, _pacejka(alpha_f, fz_f, p.pac_b_front, p.mu, p), fz_f, p.mu)
+    fx_r, fy_r = _friction_circle(fx_r, _pacejka(alpha_r, fz_r, p.pac_b_rear, mu_r, p), fz_r, mu_r)
 
     cd, sd = jnp.cos(delta), jnp.sin(delta)
     ax = (fx_r + fx_f * cd - fy_f * sd - resist) / p.mass + s.vy * s.r

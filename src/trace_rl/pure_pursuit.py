@@ -24,6 +24,8 @@ class PPConfig:
     lookahead_max: float = 40.0  # m
     speed_preview: float = 0.3  # s; speed target is read this far ahead to cover actuation lag
     speed_gain: float = 0.5  # pedal per m/s of speed error
+    # rad of steer per rad/s of yaw-rate error. Without it the car spins with load transfer on.
+    yaw_gain: float = 0.15
     traction_frac: float = 0.8  # share of the rear grip left after cornering that throttle may use
 
 
@@ -67,7 +69,9 @@ def act(
     dx, dy = tx - (car.x - params.lr * c), ty - (car.y - params.lr * sn)
     local_x, local_y = c * dx + sn * dy, -sn * dx + c * dy
     dist2 = local_x**2 + local_y**2
-    delta = jnp.arctan(2 * (params.lf + params.lr) * local_y / dist2)
+    kappa = 2 * local_y / dist2
+    # Yaw-rate feedback: counter-steer when the car rotates faster than the pursuit arc asks.
+    delta = jnp.arctan((params.lf + params.lr) * kappa) + cfg.yaw_gain * (car.vx * kappa - car.r)
     steer = jnp.clip(delta / params.max_steer, -1.0, 1.0)
 
     v_target = interp(v_profile, tracks, tid, state.s + cfg.speed_preview * car.vx)
@@ -76,7 +80,7 @@ def act(
     # car spins on corner exit (370 kW, rear drive).
     wheelbase = params.lf + params.lr
     fz = params.mass * G + 0.5 * RHO_AIR * params.cla * car.vx**2
-    rear_grip = params.mu * fz * params.lf / wheelbase
+    rear_grip = params.mu * params.mu_rear_scale * fz * params.lf / wheelbase
     rear_lat = params.mass * jnp.abs(car.vx * car.r) * params.lf / wheelbase
     budget = cfg.traction_frac * jnp.sqrt(jnp.maximum(rear_grip**2 - rear_lat**2, 0.0))
     max_drive = jnp.minimum(params.max_drive_force, params.power / jnp.maximum(car.vx, 1.0))

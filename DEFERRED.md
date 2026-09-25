@@ -10,7 +10,7 @@ Out of scope for phase 1. One line of reasoning each.
 
 ## Physics fidelity
 - **Aero downforce on by default**: implemented behind `cla`, off; pure pursuit handles it, but it changes lap times and handling and should be evaluated on its own.
-- **Load transfer on by default**: implemented behind `load_transfer`, off; turning it on shifts handling balance and should be evaluated on its own.
+- **Load transfer on by default**: implemented behind `load_transfer`, off. The default car is exactly neutral at the limit, so with it on any forward load shift (braking, even drag) makes the rear let go first; pure pursuit laps it cleanly only with yaw-rate feedback. `mu_rear_scale` (off at 1.0) adds a limit-understeer margin. Flipping either default changes what the policy learns on, so decide before the GPU run.
 - **Lateral load transfer / four-wheel model**: the bicycle model has none; matters for kerbs and tyre temperature, not for clean laps.
 - **Actuator dynamics** (steering rate limit, pedal lag): the jerk penalty stands in; add if the policy exploits instant inputs.
 - **Tyre temperature and wear, surfaces, kerbs, grass grip**: not needed to lap cleanly.

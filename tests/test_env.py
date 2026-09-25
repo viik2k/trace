@@ -13,9 +13,12 @@ REFS = track.reference_tracks()
 TRACKS = track.stack(list(REFS.values()))
 
 
-@pytest.mark.parametrize("cla", [0.0, 3.0])
-def test_pure_pursuit_clean_laps_on_reference_tracks(cla):
-    p = CarParams(cla=cla)
+@pytest.mark.parametrize(
+    "car",
+    [{}, {"cla": 3.0}, {"load_transfer": 1.0}, {"load_transfer": 1.0, "mu_rear_scale": 1.05}],
+)
+def test_pure_pursuit_clean_laps_on_reference_tracks(car):
+    p = CarParams(**car)
     vprof = jnp.asarray(np.stack([pure_pursuit.speed_profile(t, p) for t in REFS.values()]))
     policy = lambda st, obs: pure_pursuit.act(st, TRACKS, vprof, p)  # noqa: E731
     run = jax.jit(jax.vmap(lambda tid: env.rollout(policy, TRACKS, tid, p, CFG, int(150 / DT))))
