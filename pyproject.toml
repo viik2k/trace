@@ -1,0 +1,44 @@
+[project]
+name = "trace-rl"
+version = "0.1.0"
+description = "Learned racing AI, phase 1: GPU-parallel JAX sim and PPO"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "jax>=0.11",
+    "equinox>=0.13",
+    "optax>=0.2.8",
+    "numpy>=2.0",
+    "scipy>=1.14",
+    "rerun-sdk>=0.38",
+    "tyro>=1.0",
+    "aim>=3.29",
+]
+
+[project.optional-dependencies]
+# GPU box only (Linux/WSL2): `uv sync --extra cuda`
+cuda = ["jax[cuda12]>=0.11"]
+
+[dependency-groups]
+dev = ["pytest>=8", "ruff>=0.6"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/trace_rl"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
+ignore = ["E741"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff.lint.flake8-bugbear]
+# Frozen dataclasses are immutable, so they are safe as argument defaults.
+extend-immutable-calls = ["trace_rl.track.GenConfig", "trace_rl.pure_pursuit.PPConfig"]
