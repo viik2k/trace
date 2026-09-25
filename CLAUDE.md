@@ -18,9 +18,9 @@ Nothing beyond phase 1 gets built; later ideas go in DEFERRED.md with one line o
 - Physics 60 Hz (4 substeps), policy 20 Hz (action repeat 3), gamma 0.99.
 - Track limits: penalty when all four wheels are over the edge; terminate 3 m beyond that.
 - Checkpoint selection on held-out procedural val tracks; reference tracks only in M5.
-- Reward: 0.01/m progress, -0.05 per decision past limits, -0.002 * ||delta action||^2,
-  -2.0 on termination (runoff or stuck; stuck included so stopping can't dodge it). Owner chose a
-  crash penalty over raising gamma to fix corner over-speed. Gamma stays 0.99.
+- Reward: 0.01/m progress, -0.05 per decision past limits, -0.01 * ||delta action||^2.
+  Crash penalty (`crash_penalty`) exists but is 0: owner dropped it 2026-09-26 after the GPU A/B,
+  and raised the jerk penalty 0.002 -> 0.01 against steering weave. Gamma stays 0.99.
 
 ## Gotchas found so far
 - Physics substeps are separated by `jax.lax.optimization_barrier`. Without it XLA fusion blows up
@@ -41,5 +41,12 @@ Nothing beyond phase 1 gets built; later ideas go in DEFERRED.md with one line o
   (133 vs 152 km/h mean), crashes at lower speed but about as often (53 vs 50 of 64 val tracks),
   best val clean 0.11 vs 0.17. M5: oval now clean, hairpin still crashes, sweeper 67 s vs 56 s and
   more steering weave. Single seed at 10% budget, so not conclusive; needs a GPU A/B.
-- Pending on the GPU box: M1 benchmark numbers, full training run, M5 on a trained policy.
+- GPU box = this PC's RTX 2060 via Docker Desktop (`--gpus all`, venv in volume `trace-venv`,
+  Aim in volume `trace-aim`); see `runs/queue.sh`. JAX can't preallocate 6 GB there, falls back
+  to ~4 GB and runs fine. M1: 252 M car-steps/s at 4096 cars. Training ~860k sps, 300M in ~7 min.
+- GPU A/B 2026-09-25, 300M, seeds 0-2, best val clean: crash penalty 0.25/0.44/0.44, none
+  0.13/0.47/0.36. Inconclusive; no penalty drives ~12% faster and beats pure pursuit on the oval
+  (43.0 vs 45.5 s). All 7 runs crash the hairpin (13.1 m radius, ~p5 of the train pool).
+  Entropy collapses by ~50M steps (ent_coef 0). 1.5B-step run: val clean 0.48, sweeper 36% of
+  time on the edge; nopen-s1 weaves at 14 steer reversals/s on the sweeper. No fix applied yet.
 - Pending on the homelab (via the Arche MCP): Aim server and persistent checkpoint storage.

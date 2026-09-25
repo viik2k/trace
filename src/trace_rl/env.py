@@ -26,10 +26,10 @@ class EnvConfig:
     # Reward: progress per metre, minus penalties. Scaled so returns stay O(1-10) for the critic.
     progress_scale: float = 0.01  # per metre of progress
     offtrack_penalty: float = 0.05  # per decision past track limits (= 5 m of progress)
-    jerk_penalty: float = 0.002  # times ||a_t - a_{t-1}||^2 (full steer flip = 0.8 m)
-    # On any termination, stuck included, so stopping is never a way to dodge it. Without it a
-    # crash only costs the ~5 s of progress gamma 0.99 sees ahead, which makes over-speed cheap.
-    crash_penalty: float = 2.0  # = 200 m of progress, about 5 s at 150 km/h
+    jerk_penalty: float = 0.01  # times ||a_t - a_{t-1}||^2 (full steer flip = 4 m)
+    # On any termination, stuck included, so stopping is never a way to dodge it. Off: the GPU A/B
+    # (2026-09-25) showed no clean-lap gain from 2.0 and ~12% slower driving.
+    crash_penalty: float = 0.0
     car_half_width: float = 1.0  # m
     runoff: float = 3.0  # m beyond track limits before termination
     stuck_speed: float = 1.0  # m/s

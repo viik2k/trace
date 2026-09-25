@@ -19,6 +19,10 @@ class Args:
     n_val: int = 64  # held-out procedural tracks for checkpoint selection
     seed: int = 0
     out: Path = Path("data")
+    # Share of the train pool swapped for tracks with a corner tighter than tight_radius. The
+    # natural pool has few hairpins (p5 min radius ~13 m) and every policy crashed the hairpin.
+    tight_frac: float = 0.0
+    tight_radius: float = 16.0
 
 
 def describe(name: str, pool: list[dict], stats: dict) -> None:
@@ -40,6 +44,12 @@ def main(args: Args) -> None:
     for name, n, seed in [("train", args.n_train, args.seed), ("val", args.n_val, args.seed + 1)]:
         t0 = time.time()
         pool, stats = track.generate_pool(n, seed)
+        if name == "train" and args.tight_frac > 0:
+            # ponytail: rejection by oversampling; ~4x the pool gives enough tight tracks at 16 m
+            extra, _ = track.generate_pool(4 * n, seed + 100)
+            tight = [t for t in extra if np.abs(t["curvature"]).max() > 1 / args.tight_radius]
+            tight = tight[: int(n * args.tight_frac)]
+            pool = tight + pool[: n - len(tight)]
         describe(name, pool, stats)
         path = args.out / f"tracks_{name}.npz"
         track.save(path, pool)

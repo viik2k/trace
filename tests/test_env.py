@@ -8,6 +8,8 @@ from trace_rl.env import EnvConfig
 from trace_rl.physics import CarParams
 
 P, CFG = CarParams(), EnvConfig()
+# crash_penalty is off by default; the two termination tests switch it on to check where it lands.
+CRASH = EnvConfig(crash_penalty=2.0)
 DT = CFG.action_repeat * P.dt
 REFS = track.reference_tracks()
 TRACKS = track.stack(list(REFS.values()))
@@ -79,12 +81,12 @@ def test_driving_backwards_earns_negative_progress():
 
 def test_auto_reset_on_termination():
     # Full lock at speed leaves the track; the env must reset itself inside jit.
-    state, _ = env.init_at(TRACKS, 1, 0, P, CFG, speed=40.0)
+    state, _ = env.init_at(TRACKS, 1, 0, P, CRASH, speed=40.0)
 
     def body(carry, key):
         state = carry
         state, obs, reward, done, info = env.step(
-            key, state, jnp.array([1.0, 1.0, 0.0]), TRACKS, P, CFG
+            key, state, jnp.array([1.0, 1.0, 0.0]), TRACKS, P, CRASH
         )
         return state, (done, info["terminated"], info["truncated"], state.t, reward)
 
@@ -95,17 +97,17 @@ def test_auto_reset_on_termination():
     assert term.any() and not trunc.any()
     k = int(np.argmax(done))
     assert t[k] == 0 and t[k + 1] == 1  # step counter restarted after the reset
-    assert reward[k] < -0.9 * CFG.crash_penalty < reward[k - 1]  # penalty lands on the crash step
+    assert reward[k] < -0.9 * CRASH.crash_penalty < reward[k - 1]  # penalty lands on the crash step
 
 
 def test_stopping_is_penalised_like_a_crash():
     # Guards the dodge where the car brakes to a stop instead of crashing: stuck terminates with
     # the same penalty.
-    state, _ = env.init_at(TRACKS, 0, 0, P, CFG, speed=0.0)
+    state, _ = env.init_at(TRACKS, 0, 0, P, CRASH, speed=0.0)
 
     def body(state, _):
         state, _, reward, term, *_ = env.transition(
-            state, jnp.array([0.0, 0.0, 1.0]), TRACKS, P, CFG
+            state, jnp.array([0.0, 0.0, 1.0]), TRACKS, P, CRASH
         )
         return state, (reward, term)
 
@@ -113,5 +115,5 @@ def test_stopping_is_penalised_like_a_crash():
         np.asarray, jax.jit(lambda s: jax.lax.scan(body, s, None, length=60))(state)
     )
     k = int(np.argmax(term))
-    assert term.any() and abs(k * DT - CFG.stuck_time) < 0.1
-    np.testing.assert_allclose(reward[k], -CFG.crash_penalty, atol=1e-3)
+    assert term.any() and abs(k * DT - CRASH.stuck_time) < 0.1
+    np.testing.assert_allclose(reward[k], -CRASH.crash_penalty, atol=1e-3)
