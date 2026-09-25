@@ -14,7 +14,7 @@ Nothing beyond phase 1 gets built; later ideas go in DEFERRED.md with one line o
 - Stack: uv, Python 3.12, JAX, Equinox, Optax, tyro, Rerun, Aim, ruff, pytest.
 
 ## Decisions already taken
-- Friction circle per axle on. Drag on, downforce deferred. Generic GT3-ish car.
+- Friction circle per axle on. Drag on, downforce behind `cla`, off. Generic GT3-ish car.
 - Physics 60 Hz (4 substeps), policy 20 Hz (action repeat 3), gamma 0.99.
 - Track limits: penalty when all four wheels are over the edge; terminate 3 m beyond that.
 - Checkpoint selection on held-out procedural val tracks; reference tracks only in M5.

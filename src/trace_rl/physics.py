@@ -32,6 +32,8 @@ class CarParams(eqx.Module):
     max_brake_force: float = 20000.0  # N, both axles
     brake_bias_front: float = 0.6
     cda: float = 1.2  # drag area, m^2
+    # Downforce area, m^2. 0 = off (the default car); ~3 is GT3-like.
+    cla: float = 0.0
     crr: float = 0.015  # rolling resistance coefficient
     mu: float = 1.5  # peak tyre friction
     # Pacejka lateral: Fy = mu Fz sin(C atan(B a - E (B a - atan(B a)))).
@@ -95,8 +97,11 @@ def _accelerations(s: CarState, delta, throttle, brake, p: CarParams):
 
     # Longitudinal load transfer from the commanded (pre-saturation) acceleration.
     dfz = p.load_transfer * (fx_f + fx_r - resist) * p.h_cg / wheelbase
-    fz_f = jnp.maximum(p.mass * G * p.lr / wheelbase - dfz, 0.0)
-    fz_r = jnp.maximum(p.mass * G * p.lf / wheelbase + dfz, 0.0)
+    # ponytail: downforce split like static weight, so aero balance can't shift handling. Add an
+    # aero_balance_front param if a car needs one.
+    fz = p.mass * G + 0.5 * RHO_AIR * p.cla * s.vx**2
+    fz_f = jnp.maximum(fz * p.lr / wheelbase - dfz, 0.0)
+    fz_r = jnp.maximum(fz * p.lf / wheelbase + dfz, 0.0)
 
     # Kinematic regime: no lateral tyre forces, longitudinal force limited by grip alone.
     ax_kin = (

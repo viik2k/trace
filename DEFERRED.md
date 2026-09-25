@@ -9,7 +9,7 @@ Out of scope for phase 1. One line of reasoning each.
 - **ONNX export to a Rust runtime**: only worth doing once a policy works; fixed observation scaling keeps the export stateless.
 
 ## Physics fidelity
-- **Aero downforce**: speed-dependent grip matters most on fast sweepers; a one-line Fz term when needed, but it changes the pure-pursuit speed profile too.
+- **Aero downforce on by default**: implemented behind `cla`, off; pure pursuit handles it, but it changes lap times and handling and should be evaluated on its own.
 - **Load transfer on by default**: implemented behind `load_transfer`, off; turning it on shifts handling balance and should be evaluated on its own.
 - **Lateral load transfer / four-wheel model**: the bicycle model has none; matters for kerbs and tyre temperature, not for clean laps.
 - **Actuator dynamics** (steering rate limit, pedal lag): the jerk penalty stands in; add if the policy exploits instant inputs.

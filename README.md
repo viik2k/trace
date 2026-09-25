@@ -46,8 +46,8 @@ tests/
 
 ## Design notes
 
-- **Physics**: 60 Hz, 4 internal substeps. GT3-ish car, 370 kW rear drive, no downforce. Friction
-  circle per axle. Below 5 m/s total speed it blends to a kinematic bicycle model.
+- **Physics**: 60 Hz, 4 internal substeps. GT3-ish car, 370 kW rear drive, downforce off
+  (`cla`). Friction circle per axle. Below 5 m/s total speed it blends to a kinematic bicycle model.
 - **Tracks**: resampled at uniform 2 m arc spacing, so arc length maps to an index by division
   and lookahead is a gather. Padded to 2560 points. Half run clockwise.
 - **Env**: policy acts at 20 Hz (3 physics steps per decision). Observation is car-frame only: no
