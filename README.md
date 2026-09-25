@@ -33,7 +33,7 @@ Lint: `uv run ruff check . && uv run ruff format --check .`
 ### M5 result (2026-09-26, RTX 2060 SUPER, ~35 min)
 
 ```bash
-uv run python scripts/make_tracks.py --out data/tight14 --tight-frac 0.5 --tight-radius 14
+uv run python scripts/make_tracks.py --out data/tight14   # now the defaults
 uv run python -m trace_rl.ppo --seed 1 --ent-coef 0.003 --total-steps 1500000000 \
   --train-tracks data/tight14/tracks_train.npz
 uv run python scripts/eval.py --ckpt runs/<run>/best.eqx
@@ -74,7 +74,7 @@ tests/
   and lookahead is a gather. Padded to 2560 points. Half run clockwise.
 - **Env**: policy acts at 20 Hz (3 physics steps per decision). Observation is car-frame only: no
   global position.
-- **Reward**: progress in metres × 0.01, minus 0.05 per decision past track limits (all four wheels
+- **Reward**: progress in metres × 0.01, minus 0.2 per decision past track limits (all four wheels
   over the edge), minus 0.01 × ‖Δaction‖². A termination penalty (`--env.crash-penalty`) exists but
   defaults to 0.
 - **Termination**: 3 m of runoff past track limits, or stuck below 1 m/s for 2 s. Truncation at

@@ -25,7 +25,9 @@ class EnvConfig:
     max_steps: int = 3000  # decisions per episode (150 s)
     # Reward: progress per metre, minus penalties. Scaled so returns stay O(1-10) for the critic.
     progress_scale: float = 0.01  # per metre of progress
-    offtrack_penalty: float = 0.05  # per decision past track limits (= 5 m of progress)
+    # Per decision past track limits (= 20 m of progress). Was 0.05: at that price 1.5B-step
+    # policies cut the hairpin 4-16 times per 4 laps (2026-09-26).
+    offtrack_penalty: float = 0.2
     jerk_penalty: float = 0.01  # times ||a_t - a_{t-1}||^2 (full steer flip = 4 m)
     # On any termination, stuck included, so stopping is never a way to dodge it. Off: the GPU A/B
     # (2026-09-25) showed no clean-lap gain from 2.0 and ~12% slower driving.

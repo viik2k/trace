@@ -44,7 +44,7 @@ class Config:
     gamma: float = 0.99
     gae_lambda: float = 0.95
     clip_eps: float = 0.2
-    ent_coef: float = 0.0
+    ent_coef: float = 0.003  # at 0 entropy collapsed by ~50M steps; 0.01 hurt val (2026-09-26)
     vf_coef: float = 0.5
     max_grad_norm: float = 0.5
     hidden: int = 256
