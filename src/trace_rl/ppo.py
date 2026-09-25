@@ -56,6 +56,9 @@ class Config:
     aim_repo: str = ""  # aim://host:53800 or a local path; empty = stdout only
     smoke: bool = False  # tiny config for a quick CPU check
     env: EnvConfig = field(default_factory=EnvConfig)
+    car: CarParams = field(
+        default_factory=CarParams
+    )  # saved with the run so eval uses the same car
 
 
 SMOKE = dict(
@@ -267,11 +270,12 @@ def save_checkpoint(path: Path, params, static) -> None:
 def load_checkpoint(path: Path) -> tuple[ActorCritic, Config]:
     """Rebuild the model from the run's config.json, then fill in the saved leaves."""
     raw = json.loads((Path(path).parent / "config.json").read_text())
+    car = CarParams(**raw.pop("car", {}))  # runs from before this field used the default car
     env_cfg = EnvConfig(
         **{k: tuple(v) if isinstance(v, list) else v for k, v in raw.pop("env").items()}
     )
     cfg = Config(**{k: Path(v) if k in ("train_tracks", "val_tracks", "run_dir") else v
-                    for k, v in raw.items()}, env=env_cfg)  # fmt: skip
+                    for k, v in raw.items()}, env=env_cfg, car=car)  # fmt: skip
     template = ActorCritic(cfg.env.obs_dim, cfg.hidden, cfg.depth, cfg.init_log_std,
                            jax.random.key(0))  # fmt: skip
     return eqx.tree_deserialise_leaves(path, template), cfg
@@ -299,7 +303,7 @@ def main(cfg: Config) -> None:
         aim_run.name = run_name
         aim_run["hparams"] = cfg_json
 
-    car = CarParams()
+    car = cfg.car
     key = jax.random.key(cfg.seed)
     key, k_model, k_env = jax.random.split(key, 3)
     model = ActorCritic(cfg.env.obs_dim, cfg.hidden, cfg.depth, cfg.init_log_std, k_model)

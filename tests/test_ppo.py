@@ -3,6 +3,7 @@ import jax.numpy as jnp
 import numpy as np
 
 from trace_rl import ppo, track
+from trace_rl.physics import CarParams
 
 
 def test_gae_matches_reference_loop():
@@ -39,13 +40,13 @@ def test_smoke_training_and_checkpoint_roundtrip(tmp_path):
     track.save(tmp_path / "val.npz", val)
     cfg = ppo.Config(
         smoke=True, train_tracks=tmp_path / "train.npz", val_tracks=tmp_path / "val.npz",
-        run_dir=tmp_path, run_name="smoke",
+        run_dir=tmp_path, run_name="smoke", car=CarParams(load_transfer=1.0, mu_rear_scale=1.05),
     )  # fmt: skip
     ppo.main(cfg)
     for f in ("config.json", "best.eqx", "last.eqx", "best.json"):
         assert (tmp_path / "smoke" / f).exists()
 
     model, loaded = ppo.load_checkpoint(tmp_path / "smoke" / "best.eqx")
-    assert loaded.env == cfg.env and loaded.hidden == ppo.SMOKE["hidden"]
+    assert loaded.env == cfg.env and loaded.car == cfg.car and loaded.hidden == ppo.SMOKE["hidden"]
     a = np.asarray(ppo.to_env_action(model.actor(jnp.zeros(loaded.env.obs_dim))))
     assert a.shape == (3,) and np.all(np.isfinite(a))

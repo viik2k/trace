@@ -27,6 +27,8 @@ Nothing beyond phase 1 gets built; later ideas go in DEFERRED.md with one line o
   super-linearly (500x slower on CPU). Re-benchmark with and without it on GPU.
 - Weakly-typed leaves in the train runner cause a recompile on the second chunk; create arrays
   with explicit dtypes.
+- The car is part of the run config (`--car.*`, saved in config.json). Eval and its pure-pursuit
+  baseline use the checkpoint's car. Runs saved before this field existed load the default car.
 - Aim local repos need indexing (`aim up` or `aim storage reindex`) before the SDK can read runs.
 
 ## Status

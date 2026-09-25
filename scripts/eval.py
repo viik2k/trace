@@ -16,7 +16,6 @@ import numpy as np
 import tyro
 
 from trace_rl import env, ppo, pure_pursuit, track, viz
-from trace_rl.physics import CarParams
 
 
 @dataclass
@@ -48,7 +47,7 @@ def summarise(traj: dict, length: float, dt: float) -> dict:
 
 def main(args: Args) -> None:
     model, cfg = ppo.load_checkpoint(args.ckpt)
-    car = CarParams()
+    car = cfg.car  # the car the policy trained on; the baseline drives it too
     dt = cfg.env.action_repeat * car.dt
     refs = track.reference_tracks()
     names = list(refs)

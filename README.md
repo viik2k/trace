@@ -25,7 +25,7 @@ uv run python -c "import jax; print(jax.devices())"
 | M3 environment | `uv run pytest tests/test_env.py -v -s` (pure pursuit laps all reference tracks) |
 | M4 tests | `uv run pytest tests/test_ppo.py -v` (GAE, action squashing, smoke train + checkpoint) |
 | M4 smoke run | `uv run python -m trace_rl.ppo --smoke` |
-| M4 train | `uv run python -m trace_rl.ppo --aim-repo aim://<host>:53800` (see `--help`) |
+| M4 train | `uv run python -m trace_rl.ppo --aim-repo aim://<host>:53800` (see `--help`; car variants via `--car.cla 3` etc.) |
 | M5 eval | `uv run python scripts/eval.py --ckpt runs/<run>/best.eqx` then `uv run rerun eval.rrd` |
 
 Lint: `uv run ruff check . && uv run ruff format --check .`
