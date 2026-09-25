@@ -30,6 +30,8 @@ def summarise(traj: dict, length: float, dt: float) -> dict:
     alive = traj["alive"]
     laps = env.lap_summary(traj, length, dt)
     steer = traj["action"][alive, 0]
+    dsteer = np.diff(steer)
+    moves = dsteer[np.abs(dsteer) > 0.02]  # ignore micro-jitter so reversals mean weaving
     over = traj["over_limits"].astype(int)
     return dict(
         laps=laps,
@@ -38,8 +40,8 @@ def summarise(traj: dict, length: float, dt: float) -> dict:
         flying_lap=laps[1]["time"] if len(laps) > 1 else None,
         # Style diagnostics that expose common reward hacks: steering oscillation and riding the
         # edge of the track.
-        steer_reversals_per_s=np.sum(np.diff(np.sign(np.diff(steer))) != 0) / (alive.sum() * dt),
-        mean_abs_dsteer=float(np.abs(np.diff(steer)).mean()),
+        steer_reversals_per_s=np.sum(np.diff(np.sign(moves)) != 0) / (alive.sum() * dt),
+        mean_abs_dsteer=float(np.abs(dsteer).mean()),
         edge_time_frac=float(np.mean(np.abs(traj["lateral_frac"][alive]) > 0.9)),
     )
 

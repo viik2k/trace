@@ -28,8 +28,12 @@ Nothing beyond phase 1 gets built; later ideas go in DEFERRED.md with one line o
 - Aim local repos need indexing (`aim up` or `aim storage reindex`) before the SDK can read runs.
 
 ## Status
-- M1-M3 verified on CPU. M4 pipeline verified (smoke run, tests, Aim logging); a CPU probe run
-  shows learning (speed and return rising) but no GPU-scale run yet. M5 eval script verified on an
-  untrained checkpoint.
+- M1-M3 verified on CPU. M4 pipeline verified (smoke run, tests, Aim logging).
+- CPU probe (512 envs, 30M steps, 10% of the planned budget): val clean-lap rate 0.17 and still
+  rising when the LR schedule hit zero. M5 on it: sweeper clean (55.9 s vs pure pursuit 53.1 s),
+  oval and hairpin crash. Failure mode is corner over-speed (median crash speed 1.7x the pure
+  pursuit corner speed on val), not a reward exploit. Mild steering weave on the sweeper.
+- Open reward question for the owner: gamma 0.99 gives a ~5 s horizon, so a crash only costs ~5 s
+  of progress. Proposed gamma 0.995 if over-speed crashes persist at full budget. Not applied.
 - Pending on the GPU box: M1 benchmark numbers, full training run, M5 on a trained policy.
 - Pending on the homelab (via the Arche MCP): Aim server and persistent checkpoint storage.
