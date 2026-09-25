@@ -2,7 +2,7 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 
-from trace_rl.physics import CarParams, init_state, step
+from trace_rl.physics import RHO_AIR, CarParams, G, _accelerations, init_state, step
 
 P = CarParams()
 
@@ -93,3 +93,13 @@ def test_vmap_over_car_params():
     vx = np.asarray(s.vx)
     print("speed after 2 s by mass:", vx.round(2))
     assert vx[0] > vx[1] > vx[2]  # lighter car accelerates harder
+
+
+def test_downforce_scales_grip():
+    # Pure front slip, no pedals: lateral accel is linear in front Fz, so scales by (mg + L) / mg.
+    s = init_state(vx=60.0)
+    ay = lambda p: float(_accelerations(s, p.max_steer, 0.0, 0.0, p)[1])  # noqa: E731
+    aero = CarParams(cla=3.0)
+    expected = 1 + 0.5 * RHO_AIR * aero.cla * 60.0**2 / (aero.mass * G)
+    print(f"lateral grip ratio at 60 m/s: {ay(aero) / ay(P):.3f} (expected {expected:.3f})")
+    np.testing.assert_allclose(ay(aero) / ay(P), expected, rtol=1e-4)

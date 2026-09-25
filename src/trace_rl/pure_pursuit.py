@@ -10,7 +10,7 @@ import jax.numpy as jnp
 import numpy as np
 
 from trace_rl.env import EnvState, interp
-from trace_rl.physics import CarParams, G
+from trace_rl.physics import RHO_AIR, CarParams, G
 from trace_rl.track import MAX_POINTS, Track
 
 
@@ -30,12 +30,19 @@ class PPConfig:
 def speed_profile(track: dict, params: CarParams, cfg: PPConfig = PPConfig()) -> np.ndarray:
     """Max corner speed from curvature, then a backward pass so braking starts early enough."""
     k = np.maximum(np.abs(track["curvature"]), 1e-4)
-    v = np.minimum(np.sqrt(cfg.grip_frac * params.mu * G / k), cfg.v_max)
-    a_brake = cfg.brake_frac * params.mu * G
+    # Grip per unit mass is mu (g + ka v^2) with downforce, so k v^2 = f mu (g + ka v^2).
+    ka = 0.5 * RHO_AIR * params.cla / params.mass
+    fmu = cfg.grip_frac * params.mu
+    denom = k - fmu * ka
+    v = np.where(denom > 0, np.sqrt(fmu * G / np.maximum(denom, 1e-9)), cfg.v_max)
+    v = np.minimum(v, cfg.v_max)
     n = track["n"]
     for _ in range(2):  # two passes so braking zones wrap across the start line
         for i in range(n - 1, -1, -1):
-            v[i] = min(v[i], np.sqrt(v[(i + 1) % n] ** 2 + 2 * a_brake * track["ds"]))
+            # Downforce at the slower exit speed, so the braking estimate stays conservative.
+            v_next = v[(i + 1) % n]
+            a_brake = cfg.brake_frac * params.mu * (G + ka * v_next**2)
+            v[i] = min(v[i], np.sqrt(v_next**2 + 2 * a_brake * track["ds"]))
     out = np.zeros(MAX_POINTS, np.float32)
     out[:n] = v
     return out
@@ -66,9 +73,10 @@ def act(
     v_target = interp(v_profile, tracks, tid, state.s + cfg.speed_preview * car.vx)
     err = v_target - car.vx
     # Traction budget: rear grip left after the lateral load of the current corner. Without it the
-    # car spins on corner exit (370 kW, rear drive, no downforce).
+    # car spins on corner exit (370 kW, rear drive).
     wheelbase = params.lf + params.lr
-    rear_grip = params.mu * params.mass * G * params.lf / wheelbase
+    fz = params.mass * G + 0.5 * RHO_AIR * params.cla * car.vx**2
+    rear_grip = params.mu * fz * params.lf / wheelbase
     rear_lat = params.mass * jnp.abs(car.vx * car.r) * params.lf / wheelbase
     budget = cfg.traction_frac * jnp.sqrt(jnp.maximum(rear_grip**2 - rear_lat**2, 0.0))
     max_drive = jnp.minimum(params.max_drive_force, params.power / jnp.maximum(car.vx, 1.0))
