@@ -27,6 +27,9 @@ class EnvConfig:
     progress_scale: float = 0.01  # per metre of progress
     offtrack_penalty: float = 0.05  # per decision past track limits (= 5 m of progress)
     jerk_penalty: float = 0.002  # times ||a_t - a_{t-1}||^2 (full steer flip = 0.8 m)
+    # On any termination, stuck included, so stopping is never a way to dodge it. Without it a
+    # crash only costs the ~5 s of progress gamma 0.99 sees ahead, which makes over-speed cheap.
+    crash_penalty: float = 2.0  # = 200 m of progress, about 5 s at 150 km/h
     car_half_width: float = 1.0  # m
     runoff: float = 3.0  # m beyond track limits before termination
     stuck_speed: float = 1.0  # m/s
@@ -186,15 +189,16 @@ def transition(state: EnvState, action, tracks: Track, params: CarParams, cfg: E
 
     limit = 0.5 * interp(tracks.width, tracks, tid, s) + cfg.car_half_width
     over_limits = jnp.abs(lateral) > limit
+    stuck = jnp.where(car.vx < cfg.stuck_speed, state.stuck + 1, 0)
+    decision_dt = cfg.action_repeat * params.dt
+    terminated = (jnp.abs(lateral) > limit + cfg.runoff) | (stuck * decision_dt > cfg.stuck_time)
     reward = (
         cfg.progress_scale * ds
         - cfg.offtrack_penalty * over_limits
         - cfg.jerk_penalty * jnp.sum((action - state.prev_action) ** 2)
+        - cfg.crash_penalty * terminated
     )
 
-    stuck = jnp.where(car.vx < cfg.stuck_speed, state.stuck + 1, 0)
-    decision_dt = cfg.action_repeat * params.dt
-    terminated = (jnp.abs(lateral) > limit + cfg.runoff) | (stuck * decision_dt > cfg.stuck_time)
     t = state.t + 1
     truncated = (t >= cfg.max_steps) & ~terminated
 

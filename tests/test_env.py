@@ -80,12 +80,32 @@ def test_auto_reset_on_termination():
         state, obs, reward, done, info = env.step(
             key, state, jnp.array([1.0, 1.0, 0.0]), TRACKS, P, CFG
         )
-        return state, (done, info["terminated"], info["truncated"], state.t)
+        return state, (done, info["terminated"], info["truncated"], state.t, reward)
 
     keys = jax.random.split(jax.random.key(0), 200)
-    _, (done, term, trunc, t) = jax.tree.map(
+    _, (done, term, trunc, t, reward) = jax.tree.map(
         np.asarray, jax.jit(lambda s: jax.lax.scan(body, s, keys))(state)
     )
     assert term.any() and not trunc.any()
     k = int(np.argmax(done))
     assert t[k] == 0 and t[k + 1] == 1  # step counter restarted after the reset
+    assert reward[k] < -0.9 * CFG.crash_penalty < reward[k - 1]  # penalty lands on the crash step
+
+
+def test_stopping_is_penalised_like_a_crash():
+    # Guards the dodge where the car brakes to a stop instead of crashing: stuck terminates with
+    # the same penalty.
+    state, _ = env.init_at(TRACKS, 0, 0, P, CFG, speed=0.0)
+
+    def body(state, _):
+        state, _, reward, term, *_ = env.transition(
+            state, jnp.array([0.0, 0.0, 1.0]), TRACKS, P, CFG
+        )
+        return state, (reward, term)
+
+    _, (reward, term) = jax.tree.map(
+        np.asarray, jax.jit(lambda s: jax.lax.scan(body, s, None, length=60))(state)
+    )
+    k = int(np.argmax(term))
+    assert term.any() and abs(k * DT - CFG.stuck_time) < 0.1
+    np.testing.assert_allclose(reward[k], -CFG.crash_penalty, atol=1e-3)

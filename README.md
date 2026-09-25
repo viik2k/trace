@@ -53,7 +53,7 @@ tests/
 - **Env**: policy acts at 20 Hz (3 physics steps per decision). Observation is car-frame only: no
   global position.
 - **Reward**: progress in metres × 0.01, minus 0.05 per decision past track limits (all four wheels
-  over the edge), minus 0.002 × ‖Δaction‖².
+  over the edge), minus 0.002 × ‖Δaction‖², minus 2.0 on termination (crash or stuck).
 - **Termination**: 3 m of runoff past track limits, or stuck below 1 m/s for 2 s. Truncation at
   3000 decisions (150 s).
 - **Training**: one jitted call runs `updates_per_chunk` PPO updates, with no host round-trips.
