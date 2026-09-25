@@ -213,6 +213,7 @@ def transition(state: EnvState, action, tracks: Track, params: CarParams, cfg: E
     info = dict(
         speed=car.vx,
         lateral=lateral,
+        lateral_frac=lateral / (limit - cfg.car_half_width),  # 1.0 = centre of car on the edge
         over_limits=over_limits,
         laps=state.progress / length,
         offtrack=state.offtrack,
@@ -257,6 +258,7 @@ def rollout(policy, tracks: Track, tid, params: CarParams, cfg: EnvConfig, n_ste
             yaw=nstate.car.yaw,
             speed=nstate.car.vx,
             progress=nstate.progress,
+            lateral_frac=info["lateral_frac"],
             over_limits=info["over_limits"] & alive,
             alive=alive,
             action=action,
