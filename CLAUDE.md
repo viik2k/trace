@@ -37,6 +37,9 @@ Nothing beyond phase 1 gets built; later ideas go in DEFERRED.md with one line o
   rising when the LR schedule hit zero. M5 on it: sweeper clean (55.9 s vs pure pursuit 53.1 s),
   oval and hairpin crash. Failure mode is corner over-speed (median crash speed 1.7x the pure
   pursuit corner speed on val), not a reward exploit. Mild steering weave on the sweeper.
-- Crash penalty added after that probe (see Decisions). Watch for timid driving: slow but alive.
+- Crash penalty added after that probe (see Decisions). Same-seed CPU probe with it: slower
+  (133 vs 152 km/h mean), crashes at lower speed but about as often (53 vs 50 of 64 val tracks),
+  best val clean 0.11 vs 0.17. M5: oval now clean, hairpin still crashes, sweeper 67 s vs 56 s and
+  more steering weave. Single seed at 10% budget, so not conclusive; needs a GPU A/B.
 - Pending on the GPU box: M1 benchmark numbers, full training run, M5 on a trained policy.
 - Pending on the homelab (via the Arche MCP): Aim server and persistent checkpoint storage.
