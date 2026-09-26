@@ -43,6 +43,7 @@ class GenConfig:
     length: tuple[float, float] = (1200.0, 5000.0)
     min_radius: float = 12.0  # tightest corner allowed, m
     margin: float = 6.0  # min gap between the edges of non-adjacent sections, m
+    hairpin_prob: float = 0.0  # chance of splicing in a 180 deg hairpin (see _splice_hairpin)
 
 
 def _from_control_points(ctrl: np.ndarray, width_fn) -> dict:
@@ -115,8 +116,45 @@ def generate(rng: np.random.Generator, cfg: GenConfig = GenConfig()) -> tuple[di
         return np.clip(w, *cfg.width)
 
     tr = _from_control_points(ctrl, width_fn)
+    if cfg.hairpin_prob > 0 and rng.random() < cfg.hairpin_prob:  # no draw at 0: pools unchanged
+        tr = _from_control_points(_splice_hairpin(tr, rng), width_fn)
     reason = check(tr, cfg)
     return (None, reason) if reason else (tr, "ok")
+
+
+def _splice_hairpin(tr: dict, rng: np.random.Generator) -> np.ndarray:
+    """Control points for `tr` with an outward finger spliced in: 90 deg fillet, straight leg,
+    180 deg hairpin, leg, fillet. The star-shaped control points alone never turn more than
+    ~120 deg in 60 m; the reference hairpin turns 182."""
+    r, f, leg = rng.uniform(12.5, 20.0), rng.uniform(20.0, 40.0), rng.uniform(40.0, 300.0)
+    k, length, h = tr["curvature"], tr["length"], tr["heading"]
+    pi, step = np.pi, 6.0  # uniform 6 m control spacing, as for the reference hairpin
+    # Local frame: a is arc length along the old centreline from the splice point, b the offset
+    # along its normal. The finger spans a in [-(r + f), r + f); the rest of the lap is b = 0.
+    ab = np.vstack(
+        [
+            _arc(-r - f, f, f, -pi / 2, 0, step),
+            _line((-r, f), (-r, f + leg), step),
+            _arc(0, f + leg, r, pi, 0, step),
+            _line((r, f + leg), (r, f), step),
+            _arc(r + f, f, f, pi, 3 * pi / 2, step),
+            _line((r + f, 0), (length - r - f, 0), step),
+        ]
+    )
+    # Splice at one of the straightest points so the curvilinear frame barely bends the finger,
+    # and point it away from the interior (on the left of a counter-clockwise loop).
+    s0 = tr["s"][rng.choice(np.argsort(np.abs(k))[: len(k) // 20])]
+    s = (s0 + ab[:, 0]) % length
+    at = lambda v: np.interp(s, tr["s"], v, period=length)  # noqa: E731
+    normal = np.stack([at(-np.sin(h)), at(np.cos(h))], axis=1) * -np.sign(k.sum())
+    return np.stack([at(tr["xy"][:, 0]), at(tr["xy"][:, 1])], axis=1) + ab[:, 1:] * normal
+
+
+def max_turn(tr: dict, window: float = 60.0) -> float:
+    """Largest heading change (deg) within any `window` m of the lap. A hairpin is ~180."""
+    w = int(window / tr["ds"])
+    k = np.concatenate([tr["curvature"], tr["curvature"][:w]]) * tr["ds"]
+    return float(np.degrees(np.abs(np.convolve(k, np.ones(w), "valid")).max()))
 
 
 def generate_pool(n: int, seed: int, cfg: GenConfig = GenConfig()) -> tuple[list[dict], dict]:

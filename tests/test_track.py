@@ -47,6 +47,20 @@ def test_pool_properties():
     assert 0.35 < cw < 0.65
 
 
+def test_hairpin_pool():
+    # The star-shaped generator alone never turns more than ~120 deg in 60 m.
+    cfg = GenConfig(hairpin_prob=1.0)
+    pool, _ = track.generate_pool(20, seed=5, cfg=cfg)
+    turns = [track.max_turn(t) for t in pool]
+    print(f"max turn in 60 m: min {min(turns):.0f}, ref {track.max_turn(REFS['hairpin']):.0f}")
+    assert np.mean(np.array(turns) >= 150) >= 0.9
+    for tr in pool:
+        assert track.check(tr, cfg) is None
+        assert _spacing_ok(tr)
+        assert _curvature_matches_heading(tr)
+        assert np.isclose(abs(tr["curvature"].sum() * tr["ds"]), 2 * np.pi, atol=0.05)
+
+
 def test_rejects_self_intersection():
     t = np.linspace(0, 2 * np.pi, 24, endpoint=False)
     figure8 = np.stack([400 * np.sin(t), 200 * np.sin(2 * t)], axis=1)

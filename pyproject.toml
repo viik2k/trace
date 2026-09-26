@@ -11,7 +11,7 @@ dependencies = [
     "scipy>=1.14",
     "rerun-sdk>=0.38",
     "tyro>=1.0",
-    "aim>=3.29",
+    "aim>=3.29; sys_platform == 'linux'",  # aimrocks has no Windows wheels
 ]
 
 [project.optional-dependencies]

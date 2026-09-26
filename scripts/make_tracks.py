@@ -23,30 +23,35 @@ class Args:
     # natural pool has few hairpins (p5 min radius ~13 m) and every policy crashed the hairpin.
     tight_frac: float = 0.5
     tight_radius: float = 14.0
+    # Chance per generated track (train and val) of a spliced-in 180 deg hairpin. Without it no
+    # track turns more than ~120 deg in 60 m, and 2 of 5 R5 seeds cut the reference hairpin.
+    hairpin_prob: float = 0.25
 
 
 def describe(name: str, pool: list[dict], stats: dict) -> None:
     length = np.array([t["length"] for t in pool])
     min_r = np.array([1 / np.abs(t["curvature"]).max() for t in pool])
     cw = np.mean([t["curvature"].sum() < 0 for t in pool])
+    hairpin = np.mean([track.max_turn(t) >= 150 for t in pool])
     tried = sum(stats.values())
     print(
         f"{name}: {len(pool)} tracks, {tried} attempts ({100 * len(pool) / tried:.0f}% accepted), "
         f"rejected { ({k: v for k, v in stats.items() if k != 'ok'}) }\n"
         f"  length m   p5/p50/p95 {np.percentile(length, [5, 50, 95]).round(0)}\n"
         f"  min radius p5/p50/p95 {np.percentile(min_r, [5, 50, 95]).round(1)}\n"
-        f"  clockwise {cw:.2f}"
+        f"  clockwise {cw:.2f}, hairpin (>= 150 deg in 60 m) {hairpin:.2f}"
     )
 
 
 def main(args: Args) -> None:
     args.out.mkdir(parents=True, exist_ok=True)
+    cfg = track.GenConfig(hairpin_prob=args.hairpin_prob)
     for name, n, seed in [("train", args.n_train, args.seed), ("val", args.n_val, args.seed + 1)]:
         t0 = time.time()
-        pool, stats = track.generate_pool(n, seed)
+        pool, stats = track.generate_pool(n, seed, cfg)
         if name == "train" and args.tight_frac > 0:
             # ponytail: rejection by oversampling; ~4x the pool gives ~1k tracks under 14 m
-            extra, _ = track.generate_pool(4 * n, seed + 100)
+            extra, _ = track.generate_pool(4 * n, seed + 100, cfg)
             tight = [t for t in extra if np.abs(t["curvature"]).max() > 1 / args.tight_radius]
             tight = tight[: int(n * args.tight_frac)]
             pool = tight + pool[: n - len(tight)]

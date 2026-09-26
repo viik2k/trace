@@ -18,9 +18,12 @@ Nothing beyond phase 1 gets built; later ideas go in DEFERRED.md with one line o
 - Physics 60 Hz (4 substeps), policy 20 Hz (action repeat 3), gamma 0.99.
 - Track limits: penalty when all four wheels are over the edge; terminate 3 m beyond that.
 - Checkpoint selection on held-out procedural val tracks; reference tracks only in M5.
-- Reward: 0.01/m progress, -0.05 per decision past limits, -0.01 * ||delta action||^2.
+- Reward: 0.01/m progress, -0.2 per decision past limits, -0.01 * ||delta action||^2.
   Crash penalty (`crash_penalty`) exists but is 0: owner dropped it 2026-09-26 after the GPU A/B,
   and raised the jerk penalty 0.002 -> 0.01 against steering weave. Gamma stays 0.99.
+- Owner 2026-09-26 before R5: off-track penalty 0.05 -> 0.2, ent_coef 0 -> 0.003.
+- Track pools (owner 2026-09-26): 25% of generated tracks, train and val, get a spliced-in 180 deg
+  hairpin (`hairpin_prob`); train also keeps 50% with a corner <14 m. R5 pools are in `data/tight14`.
 
 ## Gotchas found so far
 - Physics substeps are separated by `jax.lax.optimization_barrier`. Without it XLA fusion blows up
@@ -30,6 +33,8 @@ Nothing beyond phase 1 gets built; later ideas go in DEFERRED.md with one line o
 - The car is part of the run config (`--car.*`, saved in config.json). Eval and its pure-pursuit
   baseline use the checkpoint's car. Runs saved before this field existed load the default car.
 - Aim local repos need indexing (`aim up` or `aim storage reindex`) before the SDK can read runs.
+- Under Docker/WSL the driver can hold the GPU at 1200 MHz ("Idle" clock event reason): ~630k sps
+  instead of ~870k. Fix from an admin shell: `nvidia-smi -lgc 1800,2145` (resets on reboot).
 
 ## Status
 - M1-M3 verified on CPU. M4 pipeline verified (smoke run, tests, Aim logging).
@@ -65,4 +70,49 @@ Nothing beyond phase 1 gets built; later ideas go in DEFERRED.md with one line o
   s3 (2 of 5). s1 is clean everywhere but 0.85 s slower than pure pursuit on the hairpin. s2 and
   s4 still cut the hairpin (12-13 offs; the clean seeds are within ~2.6 s of their time). No crashes.
   Off-track 0.2 ended hairpin crashes but did not end cutting on every seed.
-- Pending on the homelab (via the Arche MCP): Aim server and persistent checkpoint storage.
+- 2026-09-26: the hairpin is out of distribution. It turns 182 deg within 60 m; no train or val track
+  exceeds 122 deg (star-shaped control points cap it at ~120 even with more radius jitter or fewer
+  points). A 64-track val set with min radius <14 m does not separate the R5 cutting seeds
+  (s2 0.89, s4 0.97) from the clean ones (s0 0.92, s3 0.97).
+- Hairpin pool (`track._splice_hairpin`): train 37% hairpins, val 25% (16 of 64). Pure pursuit laps
+  all 16 val hairpins clean. R5 on them (clean tracks / off events): s0 9/12, s3 10/16, but the
+  cutters s2 4/28 and s4 7/24, so the new val does separate them. R6 (`runs/round6.sh`, 5 seeds,
+  1.5B) trains on it.
+- R6 2026-09-27 (hairpin pool, R5 config otherwise): Phase 1 pass on 4 of 5 seeds (R5: 2 of 5).
+  Hairpin clean on all 5 (0 offs, 56.3-57.3 s vs pure pursuit 61.5; R5 cutters were 56-58 s).
+  s1 fails the sweeper instead: 5 offs, one per lap, all at s ~783 m, the inside of the 97 m right
+  after a long gentle left, at 177 km/h (PP 130), 0.3-0.4 s over. Same in best and last. Val clean
+  1.0, so the 64 val tracks miss it. s2 passes but rides the edge (16-29% of the time). No weave
+  (rev/s <= 1.3).
+- R7 2026-09-27 (`runs/round7.sh`, R6 config, seeds 5-9): clean on all three reference tracks on
+  all 5, Phase 1 pass on s5, s6, s9. s7 ties pure pursuit on the sweeper (53.00 s) and s8 is
+  slower (56.25 s): both cap their speed (s8 tops out ~208 km/h on the sweeper straights vs
+  235-245 for s5 and PP), a conservative local optimum, not an exploit. s6/s9 ride the sweeper
+  edge 36% of the time (legal). R6+R7: 7 of 10 seeds pass, 9 of 10 clean.
+- 256 fresh tracks (seed 4242, hairpin_prob 0.25, 150 s from a standing start; scratch script): R6
+  best.eqx goes off on 11-22 tracks and crashes on 0-5 (s1, the M5 failure, is cleanest at 11/4).
+  R5-s2 (a hairpin cutter): 45/14. So 3 reference tracks and a saturated 64-track val are noisy
+  robustness measures. last.eqx is no cleaner than best.eqx, so selection is not the issue.
+  About half the failing tracks have a hairpin (20% of the pool); failing min radius p50 ~14 m vs
+  18.5 m. R7 s5-s9: 9-18 tracks with offs, 1-6 crashes, so ~6% of fresh tracks have an off
+  and ~1% a crash across the 10 seeds. Pure pursuit: 0/256 offs, 0 crashes. Off events are mixed: s0 40 inside / 10 outside,
+  s1 10/13, s3 26/24 (R5-s2 38/67), so partly cutting, partly running wide.
+- R8 2026-09-27 (`runs/round8.sh`): train pool hairpin_prob 0.5 (`data/hp50`, 60% hairpins), R6
+  val, seeds 0-4. M5: all 5 clean, 4 pass (s2 speed-capped, sweeper 54.25 s); hairpin 55.3-56.9 s
+  (R6 56.3-57.3). Fresh 256 vs R6, seeds 0-4 summed: tracks with offs 84 vs 81, off events 218
+  vs 193, crashes 6 vs 16, and offs are now nearly all cuts (186 inside / 32 outside). So more
+  hairpins fixed running wide and most crashes, not cutting; the lever left for cutting is the
+  off-track penalty (owner's call). R9 (`runs/round9.sh`): hp50 seeds 5-9, for 10 vs 10.
+  Hairpin-pool pass rate so far: 11 of 15 seeds, 14 of 15 clean on all reference tracks.
+- Homelab 2026-09-26: Aim server on CT103 at `aim://192.168.4.103:53800` (UI on :43800). From
+  round 7, `train()` in runs/lib.sh logs there and runs `sync_runs` after each run's eval (runs/
+  goes to CT103, which PBS backs up nightly). If CT103 is down, training fails at Aim init: pass
+  `--aim-repo /aim` to fall back to the local volume. End round scripts with `sync_runs` so
+  roundN.txt gets copied too. See the README "Experiment tracker" section. Bump the server's aim
+  together with uv.lock. Old `trace-aim` history (gpu-*, R1-R5) was migrated there 2026-09-26.
+  R6 still logs to the local volume, and a follow-up `aim runs cp` pass copies it after round 6.
+  Not done: a live reboot test of CT103.
+  Onboarded 2026-09-26 (README "Homelab onboarding"). The UI is aim.arche.local (Authelia). Tracking
+  is aim-track.arche.local:53800 (DNS to CT103, no auth). Wazuh FIM on /opt/arche/trace is proven,
+  and the Kuma monitors are in Homelab `trace-monitors.json`. AIM= uses aim-track.arche.local, which
+  passed the dk client test. If Pi-hole is down, fall back to 192.168.4.103.
