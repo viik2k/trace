@@ -60,6 +60,9 @@ Nothing beyond phase 1 gets built; later ideas go in DEFERRED.md with one line o
   - R4, 1.5B, 50% <14 m pool (`data/tight14`), seeds 0-2: 0.86/0.91/0.97. s1 passes Phase 1:
     clean on all three reference tracks and beats pure pursuit (README). s0 crashes the hairpin;
     s2 laps it but goes off 10x on the oval. Passing on only 1 of 3 seeds is not robust yet.
-- Open for the owner: whether to raise the off-track penalty (hairpin cutting), and whether to make
-  ent_coef 0.003 and the tight pool the defaults.
+- R5 2026-09-26 (`runs/round5.sh`): off-track 0.2, ent 0.003 and the 14 m pool as defaults, 1.5B,
+  seeds 0-4. Val clean 1.0 on all 5, so val no longer separates runs. Full Phase 1 pass on s0 and
+  s3 (2 of 5). s1 is clean everywhere but 0.85 s slower than pure pursuit on the hairpin. s2 and
+  s4 still cut the hairpin (12-13 offs; the clean seeds are within ~2.6 s of their time). No crashes.
+  Off-track 0.2 ended hairpin crashes but did not end cutting on every seed.
 - Pending on the homelab (via the Arche MCP): Aim server and persistent checkpoint storage.
