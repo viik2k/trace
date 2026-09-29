@@ -51,6 +51,14 @@ class Config:
     depth: int = 2
     init_log_std: float = -0.5
     val_seconds: float = 300.0  # standing-start rollout length per validation track
+    # ADR (Automatic Domain Randomisation, OpenAI 2019) over track difficulty. The train pool is
+    # sorted easy to hard and resets draw only from its first `cap` tracks, starting with one band
+    # (as many tracks as the val set). After each chunk the band at the top of the range is run
+    # like validation: the cap grows by a band when its clean-lap rate reaches the upper
+    # threshold and shrinks by one below the lower. Upper 0.8, not 0.9: R6-s0 after 1.5B on the
+    # full pool is clean on only 0.89 of its hardest band, so 0.9 would stall short of the end.
+    adr: bool = False
+    adr_thresholds: tuple[float, float] = (0.5, 0.8)
     run_dir: Path = Path("runs")
     run_name: str = ""  # default: timestamp
     aim_repo: str = ""  # aim://host:53800 or a local path; empty = stdout only
@@ -168,10 +176,11 @@ def episode_metrics(b: Batch):
 
 def make_train_chunk(cfg: Config, static, optimizer, car: CarParams):
     env_step = jax.vmap(
-        lambda k, s, a, tr: env.step(k, s, a, tr, car, cfg.env), in_axes=(0, 0, 0, None)
+        lambda k, s, a, tr, n: env.step(k, s, a, tr, car, cfg.env, n),
+        in_axes=(0, 0, 0, None, None),
     )
 
-    def update(runner, tracks):
+    def update(runner, tracks, n_tracks):
         params, opt_state, env_state, obs, key = runner
         model = eqx.combine(params, static)
 
@@ -184,7 +193,7 @@ def make_train_chunk(cfg: Config, static, optimizer, car: CarParams):
             value = jax.vmap(model.critic)(obs)
             u = mean + jnp.exp(model.log_std) * jax.random.normal(k_act, mean.shape)
             env_state, next_obs, reward, done, info = env_step(
-                jax.random.split(k_env, cfg.n_envs), env_state, to_env_action(u), tracks
+                jax.random.split(k_env, cfg.n_envs), env_state, to_env_action(u), tracks, n_tracks
             )
             # A time limit is not a real ending. Bootstrap through it by folding gamma * V(final
             # obs) into the reward, then cut the trace there like any other done.
@@ -231,11 +240,12 @@ def make_train_chunk(cfg: Config, static, optimizer, car: CarParams):
         metrics = episode_metrics(b) | jax.tree.map(jnp.mean, aux)
         return (params, opt_state, env_state, obs, key), metrics
 
-    def train_chunk(runner, tracks):
+    def train_chunk(runner, tracks, n_tracks):
         # tracks is an argument, not a closure: a closed-over array is baked into the compiled
-        # program as a constant (~130 MB for the training pool).
+        # program as a constant (~130 MB for the training pool). n_tracks (resets draw from the
+        # first n_tracks) is a traced int32 scalar, so ADR can move it without a recompile.
         return jax.lax.scan(
-            lambda r, _: update(r, tracks), runner, None, length=cfg.updates_per_chunk
+            lambda r, _: update(r, tracks, n_tracks), runner, None, length=cfg.updates_per_chunk
         )
 
     # donate_argnums: the old runner buffers are reused for the new one, halving peak memory.
@@ -294,6 +304,12 @@ def main(cfg: Config) -> None:
     if cfg.smoke:
         tracks = jax.tree.map(lambda a: a[:16], tracks)
         val_tracks = jax.tree.map(lambda a: a[:4], val_tracks)
+    n_pool, band = tracks.n.shape[0], val_tracks.n.shape[0]
+    cap = n_pool
+    if cfg.adr:
+        assert band <= n_pool, f"ADR band ({band} val tracks) exceeds the pool ({n_pool})"
+        tracks = jax.tree.map(lambda a: a[track.by_difficulty(tracks)], tracks)
+        cap = band
 
     aim_run = None
     if cfg.aim_repo:
@@ -317,7 +333,7 @@ def main(cfg: Config) -> None:
         optax.clip_by_global_norm(cfg.max_grad_norm),
         optax.adam(optax.linear_schedule(cfg.lr, 0.0, n_grad_steps), eps=1e-5),
     )
-    env_state, obs = jax.vmap(lambda k: env.reset(k, tracks, car, cfg.env))(
+    env_state, obs = jax.vmap(lambda k: env.reset(k, tracks, car, cfg.env, cap))(
         jax.random.split(k_env, cfg.n_envs)
     )
     runner = (params, optimizer.init(params), env_state, obs, key)
@@ -329,9 +345,25 @@ def main(cfg: Config) -> None:
     best = (-1.0, -np.inf)
     for c in range(n_chunks):
         t0 = time.perf_counter()
-        runner, metrics = train_chunk(runner, tracks)
+        runner, metrics = train_chunk(runner, tracks, jnp.int32(cap))
         metrics = jax.device_get(metrics)  # one device->host transfer per chunk
         train_time = time.perf_counter() - t0
+        step = (c + 1) * cfg.updates_per_chunk * steps_per_update
+
+        adr_line = ""
+        if cfg.adr:
+            # The band has the val set's shape, so this reuses the compiled evaluate.
+            edge_tracks = jax.tree.map(lambda a, i=slice(cap - band, cap): a[i], tracks)
+            edge = float(jax.device_get(evaluate(runner[0], edge_tracks))["clean"].mean())
+            adr_line = f" | adr pool {cap / n_pool:.2f} edge {edge:.2f}"
+            if aim_run is not None:
+                for name, v in [("adr_pool_frac", cap / n_pool), ("adr_edge_clean", edge)]:
+                    aim_run.track(v, name=name, step=step, context={"subset": "train"})
+            lo, hi = cfg.adr_thresholds
+            if edge >= hi:
+                cap = min(cap + band, n_pool)
+            elif edge < lo:
+                cap = max(cap - band, band)
 
         step0 = c * cfg.updates_per_chunk * steps_per_update
         if aim_run is not None:
@@ -343,7 +375,6 @@ def main(cfg: Config) -> None:
         val = jax.device_get(evaluate(runner[0], val_tracks))
         clean_rate = float(val["clean"].mean())
         mean_time = float(val["lap_time"][val["clean"]].mean()) if val["clean"].any() else np.nan
-        step = (c + 1) * cfg.updates_per_chunk * steps_per_update
         if aim_run is not None:
             for name, v in [("clean_lap_rate", clean_rate),
                             ("completion_rate", float(val["completed"].mean())),
@@ -369,7 +400,7 @@ def main(cfg: Config) -> None:
             f"offtrack {last['offtrack_rate']:.3f}  term {last['termination_rate']:.2f}  "
             f"{last['mean_speed_kmh']:5.1f} km/h  ent {last['entropy']:5.2f}  "
             f"kl {last['approx_kl']:.1e} | val clean {clean_rate:.2f} "
-            f"time {mean_time:6.1f}s{tag}",
+            f"time {mean_time:6.1f}s{tag}{adr_line}",
             flush=True,
         )
     if aim_run is not None:

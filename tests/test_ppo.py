@@ -1,6 +1,7 @@
 import jax
 import jax.numpy as jnp
 import numpy as np
+import pytest
 
 from trace_rl import ppo, track
 from trace_rl.physics import CarParams
@@ -33,7 +34,8 @@ def test_action_squashing_bounds():
     np.testing.assert_allclose(a, [[-1, 0, 0], [0, 0.5, 0.5], [1, 1, 1]], atol=1e-6)
 
 
-def test_smoke_training_and_checkpoint_roundtrip(tmp_path):
+@pytest.mark.parametrize("adr", [False, True])
+def test_smoke_training_and_checkpoint_roundtrip(tmp_path, adr):
     train, _ = track.generate_pool(8, seed=0)
     val, _ = track.generate_pool(2, seed=1)
     track.save(tmp_path / "train.npz", train)
@@ -41,6 +43,7 @@ def test_smoke_training_and_checkpoint_roundtrip(tmp_path):
     cfg = ppo.Config(
         smoke=True, train_tracks=tmp_path / "train.npz", val_tracks=tmp_path / "val.npz",
         run_dir=tmp_path, run_name="smoke", car=CarParams(load_transfer=1.0, mu_rear_scale=1.05),
+        adr=adr,
     )  # fmt: skip
     ppo.main(cfg)
     for f in ("config.json", "best.eqx", "last.eqx", "best.json"):

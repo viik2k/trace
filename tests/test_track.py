@@ -93,3 +93,8 @@ def test_stack_save_load_roundtrip(tmp_path):
     back = track.to_numpy(track.load(tmp_path / "t.npz"), 1)
     np.testing.assert_allclose(back["xy"], REFS["hairpin"]["xy"], rtol=1e-6)
     assert back["n"] == REFS["hairpin"]["n"]
+
+
+def test_by_difficulty_orders_reference_tracks():
+    order = track.by_difficulty(track.stack([REFS["hairpin"], REFS["oval"], REFS["sweeper"]]))
+    assert list(order) == [1, 2, 0]  # oval, sweeper, hairpin

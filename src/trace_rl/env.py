@@ -157,10 +157,12 @@ def init_at(
     return state, observe(state, tracks, params, cfg)
 
 
-def reset(key, tracks: Track, params: CarParams, cfg: EnvConfig):
-    """Random track, random point on it, small lateral and heading noise, rolling start."""
+def reset(key, tracks: Track, params: CarParams, cfg: EnvConfig, n_tracks=None):
+    """Random track among the first n_tracks (default all), random point on it, small lateral and
+    heading noise, rolling start. n_tracks may be traced, so ADR can move it without a recompile."""
     k_track, k_idx, k_lat, k_head, k_speed = jax.random.split(key, 5)
-    tid = jax.random.randint(k_track, (), 0, tracks.n.shape[0])
+    hi = tracks.n.shape[0] if n_tracks is None else n_tracks
+    tid = jax.random.randint(k_track, (), 0, hi)
     idx = jax.random.randint(k_idx, (), 0, tracks.n[tid])
     half_w = 0.5 * tracks.width[tid, idx]
     return init_at(
@@ -228,7 +230,9 @@ def transition(state: EnvState, action, tracks: Track, params: CarParams, cfg: E
     return state, observe(state, tracks, params, cfg), reward, terminated, truncated, info
 
 
-def step(key, state: EnvState, action, tracks: Track, params: CarParams, cfg: EnvConfig):
+def step(
+    key, state: EnvState, action, tracks: Track, params: CarParams, cfg: EnvConfig, n_tracks=None
+):
     """transition() plus auto-reset inside jit.
 
     A reset state is computed every step and selected with jnp.where wherever the episode ended.
@@ -237,7 +241,7 @@ def step(key, state: EnvState, action, tracks: Track, params: CarParams, cfg: En
     """
     state, obs, reward, terminated, truncated, info = transition(state, action, tracks, params, cfg)
     done = terminated | truncated
-    reset_state, reset_obs = reset(key, tracks, params, cfg)
+    reset_state, reset_obs = reset(key, tracks, params, cfg, n_tracks)
     state = jax.tree.map(lambda r, s: jnp.where(done, r, s), reset_state, state)
     info = dict(info, final_obs=obs, terminated=terminated, truncated=truncated)
     return state, jnp.where(done, reset_obs, obs), reward, done, info

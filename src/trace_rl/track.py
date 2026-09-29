@@ -157,6 +157,15 @@ def max_turn(tr: dict, window: float = 60.0) -> float:
     return float(np.degrees(np.abs(np.convolve(k, np.ones(w), "valid")).max()))
 
 
+def by_difficulty(tracks: Track) -> np.ndarray:
+    """Indices of a batch, easiest first. Score = rank of the tightest corner + rank of max_turn:
+    fresh-track failures are hairpins and small radii (2026-09-27)."""
+    curv, n, ds = np.asarray(tracks.curvature), np.asarray(tracks.n), np.asarray(tracks.ds)
+    turn = [max_turn(dict(curvature=curv[i, : n[i]], ds=ds[i])) for i in range(len(n))]
+    rank = lambda v: np.argsort(np.argsort(v, kind="stable"), kind="stable")  # noqa: E731
+    return np.argsort(rank(np.abs(curv).max(axis=1)) + rank(turn), kind="stable")
+
+
 def generate_pool(n: int, seed: int, cfg: GenConfig = GenConfig()) -> tuple[list[dict], dict]:
     rng = np.random.default_rng(seed)
     tracks, stats = [], {"ok": 0, "length": 0, "curvature": 0, "overlap": 0}

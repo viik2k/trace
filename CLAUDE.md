@@ -104,6 +104,19 @@ Nothing beyond phase 1 gets built; later ideas go in DEFERRED.md with one line o
   hairpins fixed running wide and most crashes, not cutting; the lever left for cutting is the
   off-track penalty (owner's call). R9 (`runs/round9.sh`): hp50 seeds 5-9, for 10 vs 10.
   Hairpin-pool pass rate so far: 11 of 15 seeds, 14 of 15 clean on all reference tracks.
+- R9 (hp50, seeds 5-9): pass on s5, s6, s9; s7 goes off 4x on the sweeper, s8 is clean but slower
+  than pure pursuit there. hp50 is 7 of 10 seeds, the same as hp25 (R6+R7).
+  `scripts/fresh_eval.py` is the fresh-256 check in the repo (it reproduces R8's 84 tracks with
+  offs / 6 crashes). R9: 61/11. The hp50 control for ADR is 10 seeds: tracks with offs per seed
+  21 24 20 11 8 13 10 11 11 16 (mean 14.5), crashes 17 in total.
+- ADR (2026-09-29, `--adr`, default off; the default path is bit-identical on the smoke run):
+  the train pool is sorted easy to hard (`track.by_difficulty`: rank of the tightest corner plus
+  rank of max_turn). Resets draw from the first `cap` tracks. After each chunk the top band of
+  the range (64 tracks = the val set's size, so the compiled evaluate is reused) runs like
+  validation, and the cap moves one band on thresholds (0.5, 0.8). Track difficulty only: car
+  randomisation is physics fidelity, the owner's call. Converged R6-s0 by band of its pool:
+  clean 0.98 (easiest) ... 0.89 (hardest). So on hp50, ADR can only change the path to the
+  full pool, not where it ends. A/B draft: `runs/round10.sh` (not run).
 - Homelab 2026-09-26: Aim server on CT103 at `aim://192.168.4.103:53800` (UI on :43800). From
   round 7, `train()` in runs/lib.sh logs there and runs `sync_runs` after each run's eval (runs/
   goes to CT103, which PBS backs up nightly). If CT103 is down, training fails at Aim init: pass
