@@ -116,7 +116,32 @@ Nothing beyond phase 1 gets built; later ideas go in DEFERRED.md with one line o
   validation, and the cap moves one band on thresholds (0.5, 0.8). Track difficulty only: car
   randomisation is physics fidelity, the owner's call. Converged R6-s0 by band of its pool:
   clean 0.98 (easiest) ... 0.89 (hardest). So on hp50, ADR can only change the path to the
-  full pool, not where it ends. A/B draft: `runs/round10.sh` (not run).
+  full pool, not where it ends. R10 s0 (2026-09-29): stalled. The easiest band trains a fast
+  (175-185 km/h vs 139), edge-riding policy that reaches only ~0.6 clean on that band, so the cap
+  was at 0.06 of the pool at 426M steps with val clean 0.23 (R8-s0: 0.97 at 230M). Stopped; seeds 1-4
+  not run.
+- Memorisation check 2026-09-29 (`runs/diag_memo.sh`, `fresh_eval.py --tracks`): R8 s0-s4 go off
+  on 8.7% of their own 2048 train tracks and 8.7% of a matched fresh pool (`data/hp50-fresh`, seed
+  777); crashes 1.1% vs 1.2%. So a bigger pool is not the lever. Offs happen on tracks the policy
+  trained on.
+- Night 2026-09-29 (Finn OK'd the compute): off-track penalty dose-response on hp50, defaults
+  unchanged. R11 0.5 s0-4, R12 1.0 s0-4, R13 0.5 s5-9 (`runs/night-0929.sh`). Results
+  (per seed, vs off-track 0.2 = R8+R9):
+  - Fresh 256 (hp 0.25, best.eqx), tracks with offs / crashes: 0.2 14.5 / 1.7, 0.5 7.5 / 0.6,
+    1.0 3.6 / 1.8.
+  - All-hairpin fresh 256 (`--hairpin-prob 1.0`, last.eqx): 0.2 33.5 / 5.8, 0.5 14.0 / 2.2,
+    1.0 7.4 / 4.0. Off-track share of decisions 0.087%, 0.028%, 0.020%.
+  - No speed cost: val time ~59 s at every dose.
+  - M5 pass: 0.2 7/10, 0.5 7/10, 1.0 4/5. R13 s7/s8 cut the same sweeper corner as R6-s1 and
+    R9-s7 (s ~780 m, inside of the 93 m right, once per lap).
+  - R12-s1 at 1.0 is degenerate: it never leaves the start line on 12/256 hairpin tracks (a stuck
+    termination costs nothing with crash_penalty 0), weaves on the hairpin (3.1 rev/s) and is
+    slower than pure pursuit. No other seed does this (at most 1 track).
+  - Corner log (`fresh_eval.py --corners`, last.eqx, hairpin set): the 180 deg hairpin itself is
+    0-13 of 58-300 offs per round. Most offs are at the 90 deg first fillet at s=0 (R 20-40 m):
+    on flying laps outside at the grip limit (entry ~100-110 km/h, 1.28x the centreline limit),
+    from the standing start inside at ~20 km/h (an eval artefact of starting there). ADR (R10)
+    never reached a hairpin: the first one is at rank 515 of 2048 by difficulty, the cap at 128.
 - Homelab 2026-09-26: Aim server on CT103 at `aim://192.168.4.103:53800` (UI on :43800). From
   round 7, `train()` in runs/lib.sh logs there and runs `sync_runs` after each run's eval (runs/
   goes to CT103, which PBS backs up nightly). If CT103 is down, training fails at Aim init: pass
